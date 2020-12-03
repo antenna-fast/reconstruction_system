@@ -70,15 +70,22 @@ def register_one_rgbd_pair(s, t, color_files, depth_files, intrinsic, with_openc
 
 
 # Multiway registration
+# implement of 《Robust Reconstruction of Indoor Scenes, CVPR, 2015.》
 # step 2
-def make_posegraph_for_fragment(path_dataset, sid, eid, color_files,
+
+# this function builds a pose graph for multiway registration of all RGBD images in this sequence.
+# Each graph node represents an RGBD image and its pose which transforms the geometry to the global fragment space.
+# For efficiency, only key frames are used.
+# 为RGBD序列构建pose graph
+def make_posegraph_for_fragment(path_dataset,
+                                sid, eid, color_files,
                                 depth_files, fragment_id, n_fragments,
                                 intrinsic, with_opencv, config):
     o3d.utility.set_verbosity_level(o3d.utility.VerbosityLevel.Error)
     pose_graph = o3d.pipelines.registration.PoseGraph()
     trans_odometry = np.identity(4)
-    pose_graph.nodes.append(
-        o3d.pipelines.registration.PoseGraphNode(trans_odometry))
+    pose_graph.nodes.append(o3d.pipelines.registration.PoseGraphNode(trans_odometry))
+
     for s in range(sid, eid):
         for t in range(s + 1, eid):
             # odometry
@@ -104,11 +111,9 @@ def make_posegraph_for_fragment(path_dataset, sid, eid, color_files,
             # keyframe loop closure
             if s % config['n_keyframes_per_n_frame'] == 0 \
                     and t % config['n_keyframes_per_n_frame'] == 0:
-                print(
-                    "Fragment %03d / %03d :: RGBD matching between frame : %d and %d"
+                print("Fragment %03d / %03d :: RGBD matching between frame : %d and %d"
                     % (fragment_id, n_fragments - 1, s, t))
-                [success, trans,
-                 info] = register_one_rgbd_pair(s, t, color_files, depth_files,
+                [success, trans, info] = register_one_rgbd_pair(s, t, color_files, depth_files,
                                                 intrinsic, with_opencv, config)
                 if success:
                     pose_graph.edges.append(
@@ -119,6 +124,8 @@ def make_posegraph_for_fragment(path_dataset, sid, eid, color_files,
         pose_graph)
 
 
+# Once the poses are estimates,
+# RGBD integration is used to reconstruct a colored fragment from each RGBD sequence.
 def integrate_rgb_frames_for_fragment(color_files, depth_files, fragment_id,
                                       n_fragments, pose_graph_name, intrinsic,
                                       config):
