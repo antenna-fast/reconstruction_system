@@ -8,9 +8,11 @@ import numpy as np
 import math
 import open3d as o3d
 import sys
+
 sys.path.append("../utility")
 from file import join, make_clean_folder, get_rgbd_file_lists
 from opencv import initialize_opencv
+
 sys.path.append(".")
 from optimize_posegraph import optimize_posegraph_for_fragment
 
@@ -52,9 +54,9 @@ def register_one_rgbd_pair(s, t, color_files, depth_files, intrinsic, with_openc
                                                     intrinsic, False)
             if success_5pt:  # 如果粗配准成功了，则进行细配准
                 [success, trans, info] = o3d.pipelines.odometry.compute_rgbd_odometry(
-                                    source_rgbd_image, target_rgbd_image, intrinsic, odo_init,
-                                    o3d.pipelines.odometry.RGBDOdometryJacobianFromHybridTerm(),
-                                    option)
+                    source_rgbd_image, target_rgbd_image, intrinsic, odo_init,
+                    o3d.pipelines.odometry.RGBDOdometryJacobianFromHybridTerm(),
+                    option)
                 return [success, trans, info]
 
         return [False, np.identity(4), np.identity(6)]
@@ -112,9 +114,9 @@ def make_posegraph_for_fragment(path_dataset,
             if s % config['n_keyframes_per_n_frame'] == 0 \
                     and t % config['n_keyframes_per_n_frame'] == 0:
                 print("Fragment %03d / %03d :: RGBD matching between frame : %d and %d"
-                    % (fragment_id, n_fragments - 1, s, t))
+                      % (fragment_id, n_fragments - 1, s, t))
                 [success, trans, info] = register_one_rgbd_pair(s, t, color_files, depth_files,
-                                                intrinsic, with_opencv, config)
+                                                                intrinsic, with_opencv, config)
                 if success:
                     pose_graph.edges.append(
                         o3d.pipelines.registration.PoseGraphEdge(
@@ -126,6 +128,7 @@ def make_posegraph_for_fragment(path_dataset,
 
 # Once the poses are estimates,
 # RGBD integration is used to reconstruct a colored fragment from each RGBD sequence.
+# 估计完位姿，根据pose_graph把碎片化的RGBD融合起来  暂时不看具体细节，从大局掌握pipeline
 def integrate_rgb_frames_for_fragment(color_files, depth_files, fragment_id,
                                       n_fragments, pose_graph_name, intrinsic,
                                       config):
@@ -134,11 +137,11 @@ def integrate_rgb_frames_for_fragment(color_files, depth_files, fragment_id,
         voxel_length=config["tsdf_cubic_size"] / 512.0,
         sdf_trunc=0.04,
         color_type=o3d.pipelines.integration.TSDFVolumeColorType.RGB8)
+
     for i in range(len(pose_graph.nodes)):
         i_abs = fragment_id * config['n_frames_per_fragment'] + i
-        print(
-            "Fragment %03d / %03d :: integrate rgbd frame %d (%d of %d)." %
-            (fragment_id, n_fragments - 1, i_abs, i + 1, len(pose_graph.nodes)))
+        print("Fragment %03d / %03d :: integrate rgbd frame %d (%d of %d)." %
+              (fragment_id, n_fragments - 1, i_abs, i + 1, len(pose_graph.nodes)))
         rgbd = read_rgbd_image(color_files[i_abs], depth_files[i_abs], False,
                                config)
         pose = pose_graph.nodes[i].pose
@@ -163,8 +166,7 @@ def make_pointcloud_for_fragment(path_dataset, color_files, depth_files,
     o3d.io.write_point_cloud(pcd_name, pcd, False, True)
 
 
-def process_single_fragment(fragment_id, color_files, depth_files, n_files,
-                            n_fragments, config):
+def process_single_fragment(fragment_id, color_files, depth_files, n_files, n_fragments, config):
     if config["path_intrinsic"]:
         intrinsic = o3d.io.read_pinhole_camera_intrinsic(
             config["path_intrinsic"])
@@ -183,15 +185,16 @@ def process_single_fragment(fragment_id, color_files, depth_files, n_files,
                                  intrinsic, config)
 
 
+# Batch processing
+# The main function calls each individual function explained above.
 def run(config):
     print("making fragments from RGBD sequence.")
     make_clean_folder(join(config["path_dataset"], config["folder_fragment"]))
     [color_files, depth_files] = get_rgbd_file_lists(config["path_dataset"])
     n_files = len(color_files)
-    n_fragments = int(math.ceil(float(n_files) / \
-            config['n_frames_per_fragment']))
+    n_fragments = int(math.ceil(float(n_files) / config['n_frames_per_fragment']))
 
-    if config["python_multi_threading"] == True:
+    if config["python_multi_threading"]:
         from joblib import Parallel, delayed
         import multiprocessing
         import subprocess
