@@ -206,3 +206,8 @@ def run(config):
         for fragment_id in range(n_fragments):
             process_single_fragment(fragment_id, color_files, depth_files,
                                     n_files, n_fragments, config)
+
+
+# if __name__ == '__main__':
+#     print('make_fragment...')
+#     run()
